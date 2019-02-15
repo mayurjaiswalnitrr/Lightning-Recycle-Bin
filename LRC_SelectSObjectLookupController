@@ -1,0 +1,32 @@
+public class LRC_SelectSObjectLookupController {
+    @AuraEnabled
+    public static List<String> fetchLookUpValues(String searchKeyWord) {
+        Map<String,String> objectMap = new Map<String,String>();
+        List<Schema.SObjectType> objectList = Schema.getGlobalDescribe().Values();
+        String tempKeyword = searchKeyWord.toLowerCase();
+        List<String>returnList = new List<String>();
+        for(Schema.SObjectType obj : objectList){
+            
+            String objName = obj.getDescribe().getName();
+            Schema.DescribeSObjectResult fldRes = obj.getDescribe();
+            if(!objName.containsignorecase('history') && !objName.containsignorecase('tag') && !objName.containsignorecase('share') && !objName.containsignorecase('feed') && fldRes.isAccessible() && fldRes.isCreateable()  && !fldRes.isCustomSetting() && fldRes.isQueryable() && fldRes.isUndeletable()){
+                objectMap.put(fldRes.getLabel(), objName);
+            }
+        }
+       // objectMap.KeySet().sort();
+        
+        if(tempKeyword == null){
+             returnList.addAll(objectMap.keySet());
+        }
+        else{
+            Set<String> objectNames = objectMap.keySet();
+            for(String objName : objectNames){
+                if(objName.containsIgnoreCase(tempKeyword)){
+                    returnList.add(objName);
+                }
+            }
+        }
+        returnList.sort();
+        return returnList;
+    }
+}
