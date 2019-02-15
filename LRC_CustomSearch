@@ -1,0 +1,146 @@
+<aura:component controller="LRC_CustomSearchController" implements="force:appHostable,flexipage:availableForAllPageTypes,force:lightningQuickAction" access="global" >
+    <aura:attribute name="fieldNames" type="String[]" default="[]"/>
+    <aura:attribute name="disable" type="Boolean" default="true"/>
+    <aura:attribute name="recordsCount" type="Integer" default="50"/>
+    <aura:attribute name="startIndex" type="Integer" default="0"/>
+    <aura:attribute name="next" type="Boolean" default="true"/>
+    <aura:attribute name="previous" type="Boolean" default="true"/>
+    <aura:attribute name="isLoading" type="Boolean" default="false"/>
+	<aura:attribute name="sortAsc" type="Boolean" default="false"/>    
+    <aura:attribute name="selectLabel" type="String" default=""/>
+    <aura:attribute name="sortField" type="String" default=""/>
+    <aura:attribute name="userInputWrapper" type="LRC_CustomSearchController.InputWrapper" default=""/>
+    <aura:attribute name="selectAllRecords" type="Boolean" default="false"/>
+    <aura:attribute name="tempRecords" type="LRC_CustomSearchController.DeletedRecordsWrapper[]" default="[]"/>
+    <aura:attribute name="deletedRecords" type="LRC_CustomSearchController.DeletedRecordsWrapper[]" default="[]"/>
+    <aura:handler name="init" value="{!this}" action="{!c.getInputData}" />
+
+    <div class="slds-align_absolute-center slds-page-header" style="background-color: #adceeb;font-size: 1.2rem !important; font-weight: bold; text-align:center;">
+    	Lightning Recycle Bin
+    </div><br />
+    <div class="slds-grid slds-gutters slds-align_absolute-center">
+        <div class="slds-col slds-size_3-of-12">
+            <c:LRC_SelectSObjectLookup label="Select Object" IconName="standard:account" selectedRecord="{!v.userInputWrapper.sObjectName}" /><br />
+        </div>
+        <div class="slds-col slds-size_3-of-12">
+            <c:LRC_UserLookup objectAPIName="User" label="Select User" IconName="standard:user" selectedRecord="{!v.userInputWrapper.deletedByUser}" /><br />
+        </div>
+        <div class="slds-col slds-size_2-of-12" style="padding-bottom:20px;">
+            <lightning:input type="date" style="font-weight:bold;" label="Start Date" name="date" value="{!v.userInputWrapper.startDate}" />
+        </div>
+        <div class="slds-col slds-size_2-of-12" style="padding-bottom:20px;">
+            <lightning:input type="date" style="font-weight:bold;" label="End Date" name="date" value="{!v.userInputWrapper.endDate}" />
+        </div>
+        <div class="slds-col slds-size_2-of-12" style="padding-top:3px;">
+            <lightning:button variant="brand" label="Search" title="Search Deleted Records" onclick="{! c.searchRecords }" />
+            <lightning:button variant="neutral" label="Clear" title="Clear User Inputs" onclick="{! c.clearInput }" />
+        </div>
+    </div><br />
+    <aura:if isTrue="{!not(empty(v.fieldNames))}">
+        <div class="slds-grid slds-gutters">
+            <div class="slds-col slds-size_2-of-12">
+            	<label>{!v.selectLabel}</label>
+            </div>
+            <div class="slds-col slds-size_2-of-12"></div>
+            <div align="center" class="slds-col slds-size_4-of-12">
+                <lightning:button variant="brand" label="Undelete Selected" title="Undelete Selected Records" onclick="{! c.undelete }" disabled="{!v.disable}" />
+                <lightning:button variant="brand" label="Undelete All" title="Undelete All Records" onclick="{! c.undeleteAll }" disabled="{!v.disable}" />
+            </div>
+            <div class="slds-col slds-size_3-of-12"></div>
+            <div class="slds-col slds-size_1-of-12">
+                <lightning:buttonIcon variant="brand" iconName="utility:left" alternativeText="Previous Page" disabled="{! v.previous}" title="Previous Page" onclick="{! c.displayPrevious }" />
+                <lightning:buttonIcon variant="brand" iconName="utility:right" alternativeText="Next Page" title="Next Page" disabled="{! v.next}" onclick="{! c.displayNext }" />
+            </div>
+        </div>
+        <div class="slds-grid slds-gutters">
+            <div class="slds-col slds-size_1-of-12">
+            	<lightning:select aura:id="mySelect" label="" onchange="{!c.changeCount}" value="{!v.recordsCount}">
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                </lightning:select>
+            </div>
+            <div class="slds-col slds-size_11-of-12"></div>
+            
+        </div><br />
+    	<table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_col-bordered" >
+            <thead>
+            	<tr class="slds-line-height_reset">
+                    <th scope="col">
+                        <div class="slds-truncate" title="{!v.selectAllRecords}"><ui:inputCheckbox aura:id="checkAll" value="{!v.selectAllRecords}" change="{!c.checkAllBox}"/></div> 
+                    </th>
+                    <th scope="col" style="cursor: pointer;">
+                        <div class="slds-truncate" style="font-weight:bold;" title="{!v.fieldNames[0]}" onclick="{!c.sortByName}">{!v.fieldNames[0]}
+                            <aura:if isTrue="{!v.sortField == 'Name'}">
+                            	<aura:if isTrue="{!v.sortAsc}">
+                                    <lightning:icon size="x-small" title="Sort Descending" iconName="utility:arrowdown" alternativeText="Sort Descending" />
+                                    <aura:set attribute="else">
+                                        <lightning:icon size="x-small" title="Sort Ascending" iconName="utility:arrowup" alternativeText="Sort Ascending" />
+                                    </aura:set>
+                                </aura:if>
+                            </aura:if>
+                        </div>
+                    </th>
+                    <th scope="col" style="cursor: pointer;">
+                        <div class="slds-truncate" style="font-weight:bold;" title="{!v.fieldNames[1]}" onclick="{!c.sortByUser}">{!v.fieldNames[1]}
+                            <aura:if isTrue="{!v.sortField == 'Deleted By'}">
+                                <aura:if isTrue="{!v.sortAsc}">
+                                    <lightning:icon size="x-small" title="Sort Descending" iconName="utility:arrowdown" alternativeText="Sort Descending" />
+                                    <aura:set attribute="else">
+                                        <lightning:icon size="x-small" title="Sort Ascending" iconName="utility:arrowup" alternativeText="Sort Ascending" />
+                                    </aura:set>
+                                </aura:if>
+                            </aura:if>
+                        </div>
+                    </th>
+                    <th scope="col" style="cursor: pointer;">
+                        <div class="slds-truncate" style="font-weight:bold;" title="{!v.fieldNames[2]}" onclick="{!c.sortByDate}">{!v.fieldNames[2]}
+                            <aura:if isTrue="{!v.sortField == 'Deleted Date'}">
+                                <aura:if isTrue="{!v.sortAsc}">
+                                    <lightning:icon size="x-small" title="Sort Descending" iconName="utility:arrowdown" alternativeText="Sort Descending" />
+                                    <aura:set attribute="else">
+                                        <lightning:icon size="x-small" title="Sort Ascending" iconName="utility:arrowup" alternativeText="Sort Ascending" />
+                                    </aura:set>
+                                </aura:if>
+                            </aura:if>
+                        </div>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <aura:if isTrue="{!not(empty(v.tempRecords))}">
+                    <aura:iteration items="{!v.tempRecords}" var="deletedRecord">
+                        <tr class="slds-hint-parent">
+                            <td scope="row">
+                                <div class="slds-truncate" title="{!deletedRecord.selected}"><ui:inputCheckbox aura:id="myCheckboxes" value="{!deletedRecord.selected}" /></div>
+                            </td>
+                            <td>
+                                <div class="slds-truncate" title="{!deletedRecord.RecordName}">{!deletedRecord.recordName}</div>
+                            </td>
+                            <td>
+                                <div class="slds-truncate" title="{!deletedRecord.OwnerName}">{!deletedRecord.ownerName}</div>
+                            </td>
+                            <td>
+                                <div class="slds-truncate" title="{!deletedRecord.lastModifiedDate}">{!deletedRecord.lastModifiedDate}</div>
+                            </td>
+                        </tr>
+                    </aura:iteration>
+                    <aura:set attribute="else">
+                        <tr class="slds-align_absolute-center">
+							No records found in Recycle Bin for above selection!
+                        </tr>
+                    </aura:set>
+                </aura:if>
+            </tbody>
+        </table><br />
+        <div align="center">
+            <lightning:button variant="brand" disabled="{!v.disable}" label="Undelete Selected" title="Undelete Selected Records" onclick="{! c.undelete }" />
+            <lightning:button variant="brand" disabled="{!v.disable}" label="Undelete All" title="Undelete All Records" onclick="{! c.undeleteAll }" />
+        </div>
+  	</aura:if> 
+    <div role="status" class="slds_is_relative">
+        <aura:if isTrue="{! v.isLoading }">
+            <lightning:spinner alternativeText="Loading" size="medium" variant="brand"/>
+        </aura:if>
+    </div>    
+</aura:component>
