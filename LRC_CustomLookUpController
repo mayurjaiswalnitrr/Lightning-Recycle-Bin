@@ -1,0 +1,18 @@
+public class LRC_CustomLookUpController {
+    @AuraEnabled
+    public static List<SObject> fetchLookUpValues(String searchKeyWord, String ObjectName) {
+        String searchKey = searchKeyWord + '%';
+        
+        List < sObject > returnList = new List < sObject > ();
+      
+        // Create a Dynamic SOQL Query For Fetch Record List with LIMIT 5   
+        String sQuery =  'select id, Name from ' +ObjectName + ' where FirstName LIKE: searchKey or LastName LIKE: searchKey or Email LIKE: searchKey';
+        System.debug('+++++++++++sQuery:'+sQuery);
+        List < sObject > lstOfRecords = Database.query(sQuery);
+        
+        for (sObject obj: lstOfRecords) {
+            returnList.add(obj);
+        }
+        return returnList;
+    }
+}
