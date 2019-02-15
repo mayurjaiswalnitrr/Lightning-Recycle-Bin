@@ -1,0 +1,13 @@
+@isTest(seeAllData = false)
+public class LRC_CustomLookUpController_Test {
+    
+    @isTest
+    public static void test_fetchLookUpValues1(){
+        LRC_CustomLookUpController.fetchLookUpValues('', 'User');
+    }
+    
+    @isTest
+    public static void test_fetchLookUpValues2(){
+        LRC_CustomLookUpController.fetchLookUpValues('A', 'User');
+    }
+}
