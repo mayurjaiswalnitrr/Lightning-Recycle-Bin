@@ -1,0 +1,31 @@
+global class LRC_DeleteBatch implements Database.Batchable<sObject>, Database.Stateful {
+    private String objName;
+    private List<Id> recordIdList = new List<Id>();
+    public LRC_DeleteBatch(String objName,List<Id> recordIds){
+        this.objName = objName;
+        this.recordIdList = recordIds;
+    }
+    global Database.QueryLocator start(Database.BatchableContext BC) {
+        String query = 'select id from '+ this.objName + ' where id in :recordIdList and isDeleted = true all rows';
+        System.debug('+++++++++++query:'+query);
+        return Database.getQueryLocator(query);
+    }
+
+    global void execute(Database.BatchableContext BC, List<SObject> scope) {
+        try{
+            List<Id> recordsToBeDeleted = new List<Id>();
+            for(SObject record : scope){
+                recordsToBeDeleted.add((Id)record.get('Id'));
+            }
+            Database.undelete(recordsToBeDeleted, false);
+            System.debug('+++++++++++Deleted Success');
+        }
+        Catch(Exception e){
+            System.debug('+++++++++++Deleted error'+e.getMessage());
+        }
+        
+    }   
+
+    global void finish(Database.BatchableContext BC) {
+    }
+}
