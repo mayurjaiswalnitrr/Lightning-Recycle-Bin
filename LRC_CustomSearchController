@@ -1,0 +1,199 @@
+public class LRC_CustomSearchController {
+    
+    @AuraEnabled
+    public static String getInputWrapper(){
+        InputWrapper tempWrapper = new InputWrapper();
+        Date startDate = Date.today();
+        Date eDate = Date.newInstance(startDate.year(), startDate.month(), startDate.day());
+        Date endDate = eDate.addDays(-15);
+        tempWrapper.sObjectName = '';
+        tempWrapper.endDate = startDate;
+        tempWrapper.startDate = endDate;
+        tempWrapper.deletedByUser = new User();
+        System.debug('+++++++++++tempWrapper:'+tempWrapper);
+        return System.JSON.serialize(tempWrapper);
+    }
+    
+    @AuraEnabled
+    public static String getFieldNames(String objName){
+        Map<String,String> objectMap = new Map<String,String>();
+        List<String> fieldNames = new List<String>();
+        List<Schema.SObjectType> objectList = Schema.getGlobalDescribe().Values();
+        for(Schema.SObjectType obj : objectList){
+            if(obj.getDescribe().isAccessible() && obj.getDescribe().isCreateable()  && !obj.getDescribe().isCustomSetting() && obj.getDescribe().isQueryable() && obj.getDescribe().isUndeletable()){
+                objectMap.put(obj.getDescribe().getLabel(), obj.getDescribe().getName());
+            }
+        }
+        String selectedObjAPIName=objectMap.get(objName);
+        Map<String, Schema.SObjectField> objectFields = Schema.getGlobalDescribe().get(selectedObjAPIName).getDescribe().fields.getMap();
+        for(Schema.SobjectField field : objectFields.values())
+        {
+            Schema.DescribeFieldResult dfr = field.getDescribe();
+            if(dfr.isNameField()){
+                fieldNames.add(dfr.getName());
+            }        
+        }
+        fieldNames.add('Deleted By');
+        fieldNames.add('Deleted Date');
+        return System.JSON.serialize(fieldNames);
+    }
+    
+    @AuraEnabled
+    public static String undeleteRecords(String recordsToBeDeleted, Boolean selectAll){
+        List<Id> recordList = new List<Id>();
+        String objName;
+        Boolean check = false;
+        List<DeletedRecordsWrapper> deletedRecords = (List<DeletedRecordsWrapper>)System.JSON.deserialize(recordsToBeDeleted , List<DeletedRecordsWrapper>.class);
+        if(selectAll == true){
+            for(DeletedRecordsWrapper deletedRecord : deletedRecords){
+                recordList.add(deletedRecord.recordId);
+                if(check == false){
+                    objName = deletedRecord.selectedObject;
+                    check = true;
+                }
+            }
+        }
+        else{
+            for(DeletedRecordsWrapper deletedRecord : deletedRecords){
+                if(deletedRecord.selected == true){
+                    recordList.add(deletedRecord.recordId);
+                }
+            }
+        }
+        if(!recordList.isEmpty()){
+            if(recordList.size() < =10000){
+                try{
+                    Database.UndeleteResult[] results = Database.undelete(recordList, true);
+                    for(Database.UndeleteResult result : results){
+                        if(result.isSuccess()){
+                            return 'Done!';
+                        }
+                    }
+                }
+                catch(Exception e){
+                    return 'Records can not be restored from Recycle Bin, please contact your System Administrator!';
+                }
+            }
+            else{
+                LRC_DeleteBatch deleteBatch = new LRC_DeleteBatch(objName,recordList);
+                Database.executeBatch(deleteBatch, 200);
+                return 'Batch!'; 
+            }
+        }
+        return 'No Records Selected!';
+    }
+    
+    @AuraEnabled
+    public static String getDeletedRecords(String userInput,String sortField,Boolean isAsc){
+        String fieldName;
+        String sortedBy;
+        String ascending = 'desc';
+        InputWrapper tempWrapper = (InputWrapper)System.JSON.deserialize(userInput, InputWrapper.class);
+        System.debug('++++++++++++++tempWrapper:'+tempWrapper);
+        Map<Id,User> userMap = new Map<Id,User>();
+        Map<Id,SObject> ownerMap = new Map<Id,SObject>();
+        List<DeletedRecordsWrapper> deletedRecords = new List<DeletedRecordsWrapper>();
+        Map<String,String> objectMap = new Map<String,String>();
+        List<Schema.SObjectType> objectList = Schema.getGlobalDescribe().Values();
+        for(Schema.SObjectType obj : objectList){
+            if(obj.getDescribe().isAccessible() && obj.getDescribe().isCreateable()  && !obj.getDescribe().isCustomSetting() && obj.getDescribe().isQueryable() && obj.getDescribe().isUndeletable()){
+                objectMap.put(obj.getDescribe().getLabel(), obj.getDescribe().getName());
+            }
+        }
+        String desiredObject = objectMap.get(tempWrapper.sObjectName);
+        Map<String, Schema.SObjectField> objectFields = Schema.getGlobalDescribe().get(desiredObject).getDescribe().fields.getMap();
+        for(Schema.SobjectField field : objectFields.values())
+        {
+            Schema.DescribeFieldResult dfr = field.getDescribe();
+            if(dfr.isNameField()){
+                fieldName = dfr.getName();
+            }        
+        }
+        
+        if(sortField == 'Deleted By'){
+            sortedBy = 'OwnerId';
+        }
+        else if(sortField == 'Deleted Date'){
+            sortedBy = 'LastModifiedDate';
+        }
+        else{
+            sortedBy = fieldName;
+        }
+        if(isAsc == true){
+            ascending = 'asc';
+        }
+        Id userId=tempWrapper.deletedByUser.Id;
+        Date startDate = Date.today();
+        Date eDate = Date.newInstance(startDate.year(), startDate.month(), startDate.day());
+        Date endDate = eDate.addMonths(-1);
+        Datetime sTime;
+        Datetime eTime;
+        if(tempWrapper.startDate != null){
+            sTime = Datetime.newInstance(tempWrapper.startDate.year(), tempWrapper.startDate.month(), tempWrapper.startDate.day(), 0, 0, 0);
+        }
+        else{
+            sTime = Datetime.newInstance(endDate.year(), endDate.month(), endDate.day(), 0, 0, 0);
+        }
+        if(tempWrapper.endDate != null){
+            eTime = Datetime.newInstance(tempWrapper.endDate.year(), tempWrapper.endDate.month(), tempWrapper.endDate.day(), 23, 59, 59);
+        }
+        else{
+            eTime = Datetime.newInstance(startDate.year(), startDate.month(), startDate.day(), 23, 59, 59);
+        }
+        String query = 'Select Id,'+ fieldName + ',LastModifiedById,LastModifiedDate,LastModifiedBy.FirstName, LastModifiedBy.lastName from '+ desiredObject +' where ';
+        if(tempWrapper.deletedByUser.Id != null){
+            query += ' LastModifiedById=:userId and LastModifiedDate >=:sTime and LastModifiedDate <=:etime and isDeleted=true order by '+ sortedBy +' '+String.valueOf(ascending) + ' all rows';
+        }
+        else{
+            query += ' LastModifiedDate >=:sTime and LastModifiedDate <=:etime and isDeleted=true order by '+ sortedBy +' '+String.valueOf(ascending) + ' all rows';
+        }
+        System.debug('+++++++++++++query:'+query);
+        List<SObject> sObjectList = Database.query(query);
+        if(!sObjectList.isEmpty()){
+            for(SObject obj : sObjectList){
+                ownerMap.put((Id)obj.get('LastModifiedById'),obj);
+            }
+            userMap=new Map<Id,User>([Select Id,FirstName,LastName from User where id in:ownerMap.keySet()]);
+        }
+            
+        if(!sObjectList.isEmpty()){
+            for(SObject obj : sObjectList){
+                DeletedRecordsWrapper deletedRecord = new DeletedRecordsWrapper();
+                User user1 = userMap.get((Id)obj.get('LastModifiedById'));
+                deletedRecord.recordId = (Id)obj.get('Id');
+                deletedRecord.recordName = (String)obj.get(fieldName);
+                deletedRecord.ownerName = String.valueOf((String)user1.FirstName + ' ' + (String)user1.LastName);
+                deletedRecord.lastModifiedDate = Date.valueOf(obj.get('LastModifiedDate'));
+                deletedRecord.selectedObject = desiredObject;
+                deletedRecords.add(deletedRecord);
+            }
+            return System.JSON.serialize(deletedRecords);
+        }
+        else{
+            return System.JSON.serialize(deletedRecords);
+        }
+        
+    }
+    
+    public class InputWrapper{
+        @AuraEnabled public String sObjectName{get;set;}
+        @AuraEnabled public Date startDate{get;set;}
+        @AuraEnabled public Date endDate{get;set;}
+        @AuraEnabled public User deletedByUser{get;set;}
+        public InputWrapper(){
+            
+        }
+    }
+        
+    public class DeletedRecordsWrapper{
+        public boolean selected{get;set;}
+        public Id recordId{get;set;}
+        public String recordName{get;set;}
+        public String ownerName{get;set;}
+        public Date lastModifiedDate{get;set;}
+        public String selectedObject{get;set;}
+        public DeletedRecordsWrapper(){
+            this.selected = false;
+        }
+    }
+}
