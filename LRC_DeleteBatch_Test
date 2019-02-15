@@ -1,0 +1,21 @@
+@isTest(seeAllData = false)
+public class LRC_DeleteBatch_Test {
+    
+    @isTest
+    public static void testBatch(){
+        List<Account> accountList=new List<Account>();
+        List<Id> accountIds = new List<Id>();
+        for(Integer i=0; i < 50; i++){
+            Account acc=new Account();
+            acc.Name = 'Test Account';
+            accountList.add(acc);            
+        }
+        insert accountList;
+        for(Account acc : accountList){
+            accountIds.add(acc.Id);
+        }
+        delete accountList;
+        LRC_DeleteBatch deleteBatch = new LRC_DeleteBatch('Account',accountIds);
+        Database.executeBatch(deleteBatch, 200);
+    }
+}
