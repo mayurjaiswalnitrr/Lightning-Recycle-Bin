@@ -1,0 +1,120 @@
+@isTest(seeAllData=false)
+public class LRC_CustomSearchController_Test {
+    
+    @testSetup
+    public static void createTestData(){
+        List<Account> accList = new List<Account>();
+        for(Integer iterator = 0; iterator < 50; iterator++){
+            Account acc = new Account();
+            acc.Name = 'Test Account' + String.valueOf(iterator);
+            accList.add(acc);
+        }
+        insert accList;
+    }
+    
+    @isTest
+    public static void test_getInputWrapper(){
+        LRC_CustomSearchController.getInputWrapper();
+    }
+    
+    @isTest
+    public static void test_getFieldNames(){
+        LRC_CustomSearchController.getFieldNames('Account');
+    }
+    
+    @isTest
+    public static void test_undeleteRecords1(){
+        List<DeletedRecordsWrapper> deletedRecords = new List<DeletedRecordsWrapper>();
+        try{
+            List<Account> accList = [Select Id,Name from Account limit 100];
+            delete accList;
+            for(Account acc : accList){
+                DeletedRecordsWrapper testWrapper = new DeletedRecordsWrapper();
+                testWrapper.selected = true;
+                testWrapper.recordId = acc.Id;
+                testWrapper.recordName = acc.Name;
+                testWrapper.ownerName = '';
+                testWrapper.lastModifiedDate = Date.today();
+                testWrapper.selectedObject = 'Account';
+                deletedRecords.add(testWrapper);
+            }
+            LRC_CustomSearchController.undeleteRecords(System.JSON.serialize(deletedRecords), true);
+        }
+        catch(Exception e){
+            System.debug('+++++++++++++ErrorMsg:'+e.getMessage());
+        }
+    }
+    
+    @isTest
+    public static void test_undeleteRecords2(){
+        List<DeletedRecordsWrapper> deletedRecords = new List<DeletedRecordsWrapper>();
+        try{
+            List<Account> accList = [Select Id,Name from Account limit 2];
+            delete accList;
+            DeletedRecordsWrapper testWrapper1 = new DeletedRecordsWrapper();
+            testWrapper1.selected = true;
+            testWrapper1.recordId = accList[0].Id;
+            testWrapper1.recordName = accList[0].Name;
+            testWrapper1.ownerName = '';
+            testWrapper1.lastModifiedDate = Date.today();
+            testWrapper1.selectedObject = 'Account';
+            deletedRecords.add(testWrapper1);
+            
+            DeletedRecordsWrapper testWrapper2 = new DeletedRecordsWrapper();
+            testWrapper2.selected = false;
+            testWrapper2.recordId = accList[1].Id;
+            testWrapper2.recordName = accList[1].Name;
+            testWrapper2.ownerName = '';
+            testWrapper2.lastModifiedDate = Date.today();
+            testWrapper2.selectedObject = 'Account';
+            deletedRecords.add(testWrapper2);
+            
+            LRC_CustomSearchController.undeleteRecords(System.JSON.serialize(deletedRecords), false);
+        }
+        catch(Exception e){
+            System.debug('+++++++++++++ErrorMsg:'+e.getMessage());
+        }
+    }
+    
+    @isTest
+    public static void test_getDeletedRecords(){
+        try{
+            List<Account> accList = [Select Id,Name from Account];
+            delete accList;
+            InputWrapper testWrapper = new InputWrapper();
+            testWrapper.sObjectName = 'Account';
+            Date startDate = Date.today();
+            testWrapper.endDate = startDate.addDays(1);
+            Date eDate = Date.newInstance(startDate.year(), startDate.month(), startDate.day());
+            Date endDate = eDate.addMonths(-1);
+            testWrapper.startDate = endDate;
+            testWrapper.deletedByUser = new User();
+            LRC_CustomSearchController.getDeletedRecords(System.JSON.serialize(testWrapper), 'Name', True);
+        }
+        catch(Exception e){
+            System.debug('+++++++++++ErrorMsg:'+e.getMessage());
+        }
+    }
+    
+    public class InputWrapper{
+        @AuraEnabled public String sObjectName{get;set;}
+        @AuraEnabled public Date startDate{get;set;}
+        @AuraEnabled public Date endDate{get;set;}
+        @AuraEnabled public User deletedByUser{get;set;}
+        public InputWrapper(){
+            
+        }
+    }
+    
+    public class DeletedRecordsWrapper{
+        public boolean selected{get;set;}
+        public Id recordId{get;set;}
+        public String recordName{get;set;}
+        public String ownerName{get;set;}
+        public Date lastModifiedDate{get;set;}
+        public String selectedObject{get;set;}
+        public DeletedRecordsWrapper(){
+            this.selected = false;
+        }
+    }
+}
